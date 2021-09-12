@@ -18,9 +18,11 @@ main().catch(console.error);
 async function main(e) {
   console.log('service worker is starting ...');
 
-
   // send message tpo the page
   await sendMessage({ sw: 'mesage from sw' });
+
+  // start caching files
+  await cacheFiles();
 }
 
 
@@ -29,9 +31,10 @@ async function onInstall(e) {
   self.skipWaiting();
 }
 
-function onActivate(e) {
+async function onActivate(e) {
   console.log('activated');
   e.waitUntil(handleActivation());
+  await cacheFiles(true);
 }
 
 async function handleActivation() {
@@ -58,4 +61,42 @@ async function sendMessage(data) {
 function onClientMessageHandler({ data }) {
   console.log('message from client');
   console.log({ data });
+}
+
+
+async function cacheFiles(forceReload = false) {
+  const cache = await caches.open(cacheName);
+
+  return Promise.all(
+    urlsToCache.map(async (url) => {
+      try {
+        let res;
+
+        // check cache if already there
+        if (!forceReload) {
+          res = await cache.match(url);
+          if (res) return res;
+        }
+
+
+        // make a request
+        let fetchOptions = {
+          method: 'GET',
+          cache: 'no-cache',
+          credentials: 'omit',
+        };
+
+        console.log(`caching ${url} ...`);
+
+        res = await fetch(url, fetchOptions);
+        if (res.ok) {
+          await cache.put(url, res.clone());
+        }
+
+
+      } catch (error) {
+        console.log({ networkRequestError: error });
+      }
+    })
+  );
 }
