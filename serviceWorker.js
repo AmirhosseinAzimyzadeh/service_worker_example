@@ -1,6 +1,6 @@
 'use strict';
 
-const version = 3;
+const version = 4;
 const cacheName = `pageCache-${version}`;
 
 const urlsToCache = [
@@ -33,12 +33,13 @@ async function onInstall(e) {
 
 async function onActivate(e) {
   console.log('activated');
-  e.waitUntil(handleActivation());
   await cacheFiles(true);
+  e.waitUntil(handleActivation());
 }
 
 async function handleActivation() {
   await clients.claim();
+  await clearOutDatedCaches();
   console.log(`Service Worker Activated version:${version}`);
 }
 
@@ -98,5 +99,23 @@ async function cacheFiles(forceReload = false) {
         console.log({ networkRequestError: error });
       }
     })
+  );
+}
+
+
+async function clearOutDatedCaches() {
+  const cacheNames = await caches.keys();
+  const oldCacheNames = cacheNames.filter((storedCacheNames) => {
+    const [cacheNameIndicator, cacheVersion] = storedCacheNames.split('-');
+    if (cacheNameIndicator === cacheName.split('-')[0]) {
+      if (Number(cacheVersion) !== version) {
+        return true;
+      }
+      return false;
+    }
+  });
+
+  return Promise.all(
+    oldCacheNames.map((name) => caches.delete(name))
   );
 }
