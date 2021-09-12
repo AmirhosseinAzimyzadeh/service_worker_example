@@ -1,6 +1,6 @@
 'use strict';
 
-const version = 4;
+const version = 6;
 const cacheName = `pageCache-${version}`;
 
 const urlsToCache = [
@@ -12,6 +12,7 @@ const urlsToCache = [
 self.addEventListener('install', onInstall);
 self.addEventListener('activate', onActivate);
 self.addEventListener('message', onMessage);
+self.addEventListener('fetch', onFetch);
 
 main().catch(console.error);
 
@@ -32,9 +33,9 @@ async function onInstall(e) {
 }
 
 async function onActivate(e) {
+  e.waitUntil(handleActivation());
   console.log('activated');
   await cacheFiles(true);
-  e.waitUntil(handleActivation());
 }
 
 async function handleActivation() {
@@ -118,4 +119,40 @@ async function clearOutDatedCaches() {
   return Promise.all(
     oldCacheNames.map((name) => caches.delete(name))
   );
+}
+
+// ----------------- REQUEST INTERCEPTOR ----------------- //
+function onFetch(event) {
+  event.respondWith(router(event.request));
+}
+
+async function router(request) {
+  const url = new URL(request.url);
+  const requestURL = url.pathname;
+  const cache = await caches.open(cacheName);
+
+  console.log({ requestURL });
+  // check if request is not for outside
+  if (url.origin == location.origin) {
+
+    try {
+      const fetchOptions = {
+        method: request.method,
+        credentials: 'omit',
+        cache: 'no-cache',
+        headers: request.headers,
+      }
+
+      let res = await fetch(request.url, fetchOptions);
+      if (res && res.ok) {
+        await cache.put(requestURL, res.clone());
+        return res;
+      }
+
+    } catch {
+      let res = await cache.match(requestURL);
+      if (res) { return res.clone() }
+    }
+  }
+
 }
